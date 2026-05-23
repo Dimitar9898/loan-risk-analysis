@@ -155,4 +155,7 @@ df["loan_duration_days"] = (df["last_pymnt_d"] - df["issue_d"]).dt.days
 df["high_dti_flag"] = (df["dti"] > 20).astype(int)
 df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 
-print(df.describe())
+
+df["target_default"] = df["loan_status"].isin(["Charged Off"]).astype(int)  #checks for bad loans with 1 being charged off and 0 being good loans (fully paid or current)
+
+
