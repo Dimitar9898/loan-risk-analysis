@@ -158,4 +158,19 @@ df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 
 df["target_default"] = df["loan_status"].isin(["Charged Off"]).astype(int)  #checks for bad loans with 1 being charged off and 0 being good loans (fully paid or current)
 
+df["loan_to_income"] = (
+    df["loan_amnt"] / df["annual_inc"]
+)
+
+df["installment_ratio"] = (
+    df["installment"] / df["annual_inc"]
+)
+
+df["credit_age_years"] = (
+    (df["issue_d"] - df["earliest_cr_line"]).dt.days / 365
+)
+
+df["high_dti_flag"] = (
+    (df["dti"] > 20).astype(int)
+)
 
