@@ -1,8 +1,10 @@
 import pandas as pd
 import os
 import numpy as np
+from pathlib import Path
 
-path = r"C:\Users\dimit\Downloads\loan (1).csv"
+
+path = Path.home() / "Downloads" / "loan (1).csv"
 
 df = pd.read_csv(
     path,
@@ -156,19 +158,10 @@ df["high_dti_flag"] = (df["dti"] > 20).astype(int)
 df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 
 
-df["target_default"] = df["loan_status"].isin(["Charged Off"]).astype(int)  #checks for bad loans with 1 being charged off and 0 being good loans (fully paid or current)
+df["target_default"] = df["loan_status"].isin(["Charged Off"]).astype(int)  
+#checks for bad loans with 1 being charged off and 0 being good loans (fully paid or current)
 
-df["loan_to_income"] = (
-    df["loan_amnt"] / df["annual_inc"]
-)
-
-df["installment_ratio"] = (
-    df["installment"] / df["annual_inc"]
-)
-
-df["credit_age_years"] = (
-    (df["issue_d"] - df["earliest_cr_line"]).dt.days / 365
-)
+print(df["target_default"] .value_counts())   
 
 df["high_dti_flag"] = (
     (df["dti"] > 20).astype(int)
