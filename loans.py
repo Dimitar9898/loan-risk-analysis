@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 import numpy as np
 from pathlib import Path
 
@@ -17,11 +16,10 @@ df = pd.read_csv(
 
 df = df.dropna(axis=1, how="all")  #remove empty columns
 df=df.loc[:,df.nunique(dropna=False)>1]  #remove constant columns with 1 unique value (including NaN)
-
+df = df.drop(columns=[c for c in ["id", "member_id", "url", "title", "desc"] if c in df.columns])
 
 #Schema definition based on LendingClub data dictionary
 
-id_cols = ["id", "member_id", "url"]   #these are identifiers, we will keep as strings but not use for modeling
 numeric_cols = [
     "loan_amnt", "funded_amnt", "funded_amnt_inv",
     "installment", "annual_inc", "dti",
@@ -62,19 +60,16 @@ categorical_cols = [  #these are categorical variables, we will convert to categ
     "verification_status",
     "loan_status",
     "purpose",
-    "title",
     "zip_code",
     "addr_state",
     "initial_list_status",
     "application_type",
     "emp_title",
-    "emp_length",
-    "desc"
+    "emp_length"
 ]
 
 # combine all schema columns
 schema_cols = set(
-    id_cols +
     numeric_cols +
     percent_cols +
     date_cols +
@@ -87,9 +82,11 @@ df_cols = set(df.columns)
 # 1. columns in schema but NOT in df (invalid / extra)
 missing_in_df = schema_cols - df_cols
 
-# 2. columns in df but NOT in schema (you forgot to classify)
+# 2. columns in df but NOT in schema 
 missing_in_schema = df_cols - schema_cols
 
+if missing_in_schema:
+    print("Unclassified columns:", missing_in_schema)
 
 
 #print("Columns in df but NOT in schema:", missing_in_schema)
@@ -125,15 +122,7 @@ for col in date_cols:
 for col in categorical_cols:
     df[col] = df[col].astype("category")
 
-# -------------------------
-# 5. IDS (keep as string)
-# -------------------------
 
-# Convert ID columns to string (if they exist in the dataframe)
-df[id_cols] = df[id_cols].astype(str)
-
-# FINAL CLEANUP - drop columns we won't use for modeling (IDs, text fields)
-df = df.drop(columns=["id", "member_id", "url","title", "desc"])
 
 df["revol_util_missing"] = df["revol_util"].isna().astype(int)   #making a new column to see if missing values in revol_util 
 df["revol_util"] = df["revol_util"].fillna(df["revol_util"].median())  #fill missing values in revol_util with median (could also use mean or a model-based imputation)
@@ -157,13 +146,10 @@ df["loan_duration_days"] = (df["last_pymnt_d"] - df["issue_d"]).dt.days
 df["high_dti_flag"] = (df["dti"] > 20).astype(int)
 df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 
-
-df["target_default"] = df["loan_status"].isin(["Charged Off"]).astype(int)  
-#checks for bad loans with 1 being charged off and 0 being good loans (fully paid or current)
+df["target_default"] = (df["loan_status"] == "Charged Off").astype(int)
+# 1 = defaulted, 0 = fully paid or current
 
 print(df["target_default"] .value_counts())   
 
-df["high_dti_flag"] = (
-    (df["dti"] > 20).astype(int)
-)
-
+print(f"Shape: {df.shape}")
+print(f"Default rate: {df['target_default'].mean():.1%}")
