@@ -1,3 +1,17 @@
+# -----------------------------------------------------------
+# PROBLEM STATEMENT
+# -----------------------------------------------------------
+# We want to predict whether a borrower will default on their loan
+# given information available at the time the loan was issued.
+# This is a binary classification problem:
+# 1 = defaulted (Charged Off), 0 = paid back (Fully Paid / Current)
+#
+# We only use pre-loan columns — columns like recoveries, total_pymnt,
+# and collection_recovery_fee only exist after a default has already happened,
+# so including them would be cheating (data leakage).
+
+
+
 
 import pandas as pd
 import numpy as np
