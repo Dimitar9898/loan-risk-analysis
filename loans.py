@@ -1,3 +1,10 @@
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import sqlite3
+ 
+
+
 # -----------------------------------------------------------
 # PROBLEM STATEMENT
 # -----------------------------------------------------------
@@ -12,10 +19,6 @@
 
 
 
-
-import pandas as pd
-import numpy as np
-from pathlib import Path
  
 # -----------------------------------------------------------
 # LOAD DATA
@@ -37,14 +40,24 @@ df = df.loc[:, df.nunique(dropna=False) > 1]
 # drop columns we will never use — identifiers and free text fields
 df = df.drop(columns=[c for c in ["id", "member_id", "url", "title", "desc"] if c in df.columns])
  
+
+post_loan_cols = [
+    "funded_amnt_inv", "out_prncp", "out_prncp_inv",
+    "total_pymnt", "total_pymnt_inv", "total_rec_prncp",
+    "total_rec_int", "total_rec_late_fee", "recoveries",
+    "collection_recovery_fee", "last_pymnt_amnt"
+]
+df = df.drop(columns=[c for c in post_loan_cols if c in df.columns])
+  
  
 # -----------------------------------------------------------
 # SCHEMA DEFINITION
 # based on the LendingClub data dictionary
+# every column in the dataframe must be in one of these lists
 # -----------------------------------------------------------
  
 # only keeping pre-loan columns — post-loan columns like recoveries or total_pymnt
-# would leak information about the outcome we are trying to predict
+# would leak information about the outcome 
 numeric_cols = [
     "loan_amnt", "funded_amnt",
     "installment", "annual_inc", "dti",
@@ -52,7 +65,8 @@ numeric_cols = [
     "open_acc", "pub_rec", "revol_bal",
     "total_acc", "pub_rec_bankruptcies",
     "tax_liens", "mths_since_last_delinq",
-    "mths_since_last_record"
+    "mths_since_last_record", "collections_12_mths_ex_med",
+    "chargeoff_within_12_mths"
 ]
  
 # stored as strings with a % sign, need to strip that before converting
@@ -66,7 +80,8 @@ date_cols = [
     "issue_d",
     "earliest_cr_line",
     "last_pymnt_d",
-    "last_credit_pull_d"
+    "last_credit_pull_d",
+     "next_pymnt_d",
 ]
  
 categorical_cols = [
@@ -76,7 +91,8 @@ categorical_cols = [
     "initial_list_status", "application_type",
     "emp_title", "emp_length"
 ]
- 
+
+
  
 # -----------------------------------------------------------
 # SCHEMA VALIDATION
@@ -85,8 +101,8 @@ categorical_cols = [
 schema_cols = set(numeric_cols + percent_cols + date_cols + categorical_cols)
 df_cols = set(df.columns)
  
-missing_in_df = schema_cols - df_cols
-missing_in_schema = df_cols - schema_cols
+missing_in_df = schema_cols - df_cols        # in schema but not in data
+missing_in_schema = df_cols - schema_cols    # in data but not classified
  
 if missing_in_df:
     print("In schema but not in data:", missing_in_df)
@@ -95,9 +111,9 @@ if missing_in_schema:
  
 # filter each list to only columns that actually exist in the dataframe
 # prevents crashes if a column is missing
-numeric_cols = [col for col in numeric_cols if col in df.columns]
-percent_cols = [col for col in percent_cols if col in df.columns]
-date_cols = [col for col in date_cols if col in df.columns]
+numeric_cols     = [col for col in numeric_cols     if col in df.columns]
+percent_cols     = [col for col in percent_cols     if col in df.columns]
+date_cols        = [col for col in date_cols        if col in df.columns]
 categorical_cols = [col for col in categorical_cols if col in df.columns]
  
  
@@ -131,14 +147,13 @@ print(df.isnull().sum()[df.isnull().sum() > 0])
 # next_pymnt_d is 97% empty so not worth keeping
 df = df.drop(columns=["next_pymnt_d"], errors="ignore")
  
-# for these columns, missing means the event never happened so 0 makes sense
-for col in ["collections_12_mths_ex_med", "chargeoff_within_12_mths", "tax_liens", "pub_rec_bankruptcies"]:
+# missing here means the event never happened, so 0 is the correct fill
+for col in ["collections_12_mths_ex_med", "chargeoff_within_12_mths",
+            "tax_liens", "pub_rec_bankruptcies",
+            "mths_since_last_delinq", "mths_since_last_record"]:
     df[col] = df[col].fillna(0)
- 
-# same logic — no delinquency or public record on file means 0 months since last one
-df["mths_since_last_delinq"] = df["mths_since_last_delinq"].fillna(0)
-df["mths_since_last_record"] = df["mths_since_last_record"].fillna(0)
- 
+
+
 # flag rows where revol_util was missing before we fill it
 # useful to keep this information rather than just losing it
 df["revol_util_missing"] = df["revol_util"].isna().astype(int)
@@ -179,6 +194,15 @@ df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 # -----------------------------------------------------------
 # 1 = loan was charged off (defaulted), 0 = fully paid or current
 df["target_default"] = (df["loan_status"] == "Charged Off").astype(int)
+
+
+# -----------------------------------------------------------
+# EXPORT TO SQLITE
+# -----------------------------------------------------------
+conn = sqlite3.connect("loans.db")
+df.to_sql("loans", conn, if_exists="replace", index=False)
+conn.close()
+print("Data saved to loans.db")
  
  
 # -----------------------------------------------------------
