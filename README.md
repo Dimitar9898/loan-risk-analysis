@@ -1,72 +1,65 @@
-# Loan Risk Analysis Project
+# Loan Risk Analysis
 
-## Overview
-This project focuses on cleaning and preparing a real-world loan dataset from LendingClub. The goal was to take raw, inconsistent data and turn it into a structured dataset suitable for analysis and future modeling work.
+## What This Project Does
 
-The main focus was on building a solid data cleaning pipeline and creating meaningful features that could later be used for risk analysis or predictive modeling.
+This project takes raw LendingClub loan data and turns it into something useful. 
+The data comes in messy, with wrong types, missing values, and columns that need to be dropped or transformed. 
+The pipeline cleans all of that, loads it into a database, and runs SQL analysis to answer one core question: which borrower characteristics predict loan default?
 
----
-
-## Objective
-The main objectives of this project were:
-- Clean and standardize raw loan data
-- Fix incorrect data types (numeric, categorical, and date fields)
-- Handle missing values in a consistent way
-- Create additional features for financial analysis
-- Prepare the dataset for SQL analysis or modeling
 
 ---
+
+## The Business Problem
+
+LendingClub needs to know which borrowers are likely to default before approving a loan. 
+This project builds a profile of high risk borrowers using historical loan data. 
+The findings can help lenders decide who to approve, what interest rate to charge, and which combinations of risk factors to watch out for.
+---
+
 
 ## Dataset
-The dataset contains loan-level information including borrower details, loan amounts, interest rates, and repayment history. It is commonly used for credit risk analysis.
+The dataset comes from LendingClub and contains 39,717 loans with information on borrower income, credit history, loan purpose, grade, and repayment status. 14.2% of loans in the dataset ended in default.
+  
+## Tools
 
-Key types of information include:
-- Loan amounts and funding details
-- Borrower income and debt ratios
-- Payment history
-- Credit history variables
+Python, pandas, NumPy, SQLite, DBeaver, Tableau
 
----
 
-## Tools Used
-- Python
-- pandas
-- NumPy
+## What the Pipeline Does
 
----
+The pipeline in loans.py drops empty and useless columns, 
+removes post loan outcome columns to prevent data leakage, 
+converts all fields to the correct types, 
+fills missing values based on business logic,
+creates new features like loan to income ratio and risk flags, 
+and defines the target variable where 1 means default and 0 means fully paid.
 
-## Data Cleaning Process
-Several steps were performed to clean and structure the dataset:
 
-- Removed empty columns and constant-value columns
-- Converted numeric fields that were stored as strings
-- Cleaned percentage-based columns such as interest rate and utilization rate
-- Converted date fields into proper datetime format
-- Standardized categorical columns
-- Addressed missing values in key fields
+---## SQL Analysis
+
+The queries in queries.sql cover default rates by grade, purpose, and home ownership, filtering with WHERE and HAVING, CASE WHEN risk buckets, subqueries, CTEs, and window functions with PARTITION BY.
+
+The key finding is that borrowers with 3 or more risk flags default at 3 times the rate of clean borrowers. 
+
 
 ---
 
-## Feature Engineering
-To support analysis, additional variables were created:
+## Dashboard
 
-- loan_to_income: ratio of loan amount to annual income
-- installment_ratio: monthly installment relative to income
-- credit_age_years: length of credit history
-- loan_duration_days: duration between issue date and last payment
-- high_dti_flag: indicator for high debt-to-income ratio
-- high_interest_flag: indicator for high interest rate loans
-- revol_util_missing: flag for missing credit utilization data
+The Tableau dashboard shows the key findings visually. It covers default rate by grade, loan purpose, employment length, and state, plus average loan amount by grade.
 
----
+[View the live dashboard here]
+(https://public.tableau.com/views/LendingClub_17806833936180/Dashboard2)
 
-## Notes on Data Quality
-Some columns contained missing or incomplete values, particularly in credit history and utilization fields. These were handled either through imputation or by creating missing-data indicators.
 
----
+## Project Structure
 
-## Next Steps
-- Export cleaned dataset for SQL analysis
-- Build dashboards for loan performance insights
-- Perform exploratory risk segmentation
-- Potentially develop a predictive model for loan default risk
+loans.py runs the full cleaning pipeline and exports the data to SQLite and CSV. 
+queries.sql contains all SQL analysis organized by concept. loans.db is the SQLite database. 
+loans_clean.csv is the cleaned dataset used by Tableau.
+
+
+
+## How to Run It
+
+Download the LendingClub dataset from Kaggle and place it in your Downloads folder. Run loans.py. Open queries.sql in DBeaver connected to loans.db. Open the Tableau link to view the dashboard.
