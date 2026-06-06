@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import sqlite3
- 
+import gdown
 
 
 # -----------------------------------------------------------
@@ -23,11 +23,15 @@ import sqlite3
 # -----------------------------------------------------------
 # LOAD DATA
 # -----------------------------------------------------------
-# Path.home() makes this work on any machine, not just mine
-path = Path.home() / "Downloads" / "loan (1).csv"
+
+# download dataset from Google Drive if not already present
+file_path = Path.home() / "Downloads" / "loan (1).csv"
+if not file_path.exists():
+    print("Downloading dataset from Google Drive...")
+    gdown.download("https://drive.google.com/uc?id=1DtdOEFL9l5LCCUjXZBeHlrDJ7YmIgvQR", str(file_path), quiet=False)
  
 df = pd.read_csv(
-    path,
+    file_path,
     encoding="latin1",  # handles special characters in the CSV
     dtype=str,          # read everything as string first, we cast manually below
     engine="python"
@@ -195,14 +199,18 @@ df["target_default"] = (df["loan_status"] == "Charged Off").astype(int)
 
 
 # -----------------------------------------------------------
-# EXPORT TO SQLITE
+# EXPORT TO SQLITE AND CSV
 # -----------------------------------------------------------
-conn = sqlite3.connect("loans.db")
+output_path = Path(__file__).parent
+
+conn = sqlite3.connect(output_path / "loans.db")
 df.to_sql("loans", conn, if_exists="replace", index=False)
 conn.close()
 print("Data saved to loans.db")
- 
- 
+
+df.to_csv(output_path / "loans_clean.csv", index=False)
+print("Data saved to loans_clean.csv")
+
 # -----------------------------------------------------------
 # SUMMARY
 # -----------------------------------------------------------
@@ -212,5 +220,4 @@ print("\nRemaining missing values:")
 missing = df.isnull().sum()[df.isnull().sum() > 0]
 print(missing if not missing.empty else "None")
 
-output_path = Path(__file__).parent
-df.to_csv(output_path / "loans_clean.csv", index=False)
+
