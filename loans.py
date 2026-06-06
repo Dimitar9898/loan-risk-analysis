@@ -88,10 +88,8 @@ categorical_cols = [
     "term", "grade", "sub_grade",
     "home_ownership", "verification_status", "loan_status",
     "purpose", "zip_code", "addr_state",
-    "initial_list_status", "application_type",
     "emp_title", "emp_length"
 ]
-
 
  
 # -----------------------------------------------------------
@@ -213,4 +211,6 @@ print(f"Default rate: {df['target_default'].mean():.1%}")
 print("\nRemaining missing values:")
 missing = df.isnull().sum()[df.isnull().sum() > 0]
 print(missing if not missing.empty else "None")
- 
+
+output_path = Path(__file__).parent
+df.to_csv(output_path / "loans_clean.csv", index=False)

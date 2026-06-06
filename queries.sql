@@ -149,3 +149,28 @@ SELECT
     RANK() OVER (PARTITION BY grade ORDER BY loan_amnt DESC) as rank_within_grade
 FROM loans
 LIMIT 20;
+
+
+-- multi factor risk profile
+-- borrowers who combine bad grade + high dti + renting + small business
+WITH risk_profile AS (
+    SELECT *,
+        CASE
+            WHEN grade IN ('E','F','G') THEN 1 ELSE 0 END +
+        CASE WHEN dti > 20 THEN 1 ELSE 0 END +
+        CASE WHEN home_ownership = 'RENT' THEN 1 ELSE 0 END +
+        CASE WHEN purpose = 'small_business' THEN 1 ELSE 0 END
+        as risk_score
+    FROM loans
+)
+SELECT risk_score,
+       COUNT(*) as total_loans,
+       ROUND(AVG(target_default) * 100, 2) as default_rate_pct
+FROM risk_profile
+GROUP BY risk_score
+ORDER BY risk_score DESC;
+
+-- multi-factor risk scoring: each additional risk flag compounds default probability
+-- borrowers with 3+ flags default at 3x the rate of clean borrowers
+-- recommendation: use risk score alongside grade for better lending decisions
+-- note: risk score 4 has only 19 loans so the result is not statistically reliable due to small sample size
