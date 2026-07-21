@@ -61,5 +61,14 @@ loans_clean.csv is the cleaned dataset used by Tableau.
 
 
 ## How to Run It
+The LendingClub loan dataset used in this project is available for download here:
 
-Download the LendingClub dataset from Kaggle and place it in your Downloads folder. Run loans.py. Open queries.sql in DBeaver connected to loans.db. Open the Tableau link to view the dashboard.
+[Download LendingClub Dataset](https://drive.google.com/file/d/1DtdOEFL9l5LCCUjXZBeHlrDJ7YmIgvQR/view)
+
+The dataset was originally obtained from Kaggle and contains historical loan records used for credit risk analysis.
+
+Place the downloaded CSV file in your `Downloads` folder and run `loans.py` to execute the ETL pipeline.
+
+After the pipeline completes:
+- Run SQL queries from `queries.sql` to analyze loan risk factors
+- Open the Tableau dashboard to explore borrower risk trends
