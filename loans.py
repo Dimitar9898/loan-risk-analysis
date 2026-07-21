@@ -220,4 +220,3 @@ print("\nRemaining missing values:")
 missing = df.isnull().sum()[df.isnull().sum() > 0]
 print(missing if not missing.empty else "None")
 
-
