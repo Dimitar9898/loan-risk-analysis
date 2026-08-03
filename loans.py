@@ -1,50 +1,55 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import sqlite3
 import gdown
+import os
+import mysql.connector
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
 
+load_dotenv(Path(__file__).parent / ".env")
 
+ 
+ 
 # -----------------------------------------------------------
 # PROBLEM STATEMENT
 # -----------------------------------------------------------
-# We want to predict whether a borrower will default on their loan
-# given information available at the time the loan was issued.
-# This is a binary classification problem:
-# 1 = defaulted (Charged Off), 0 = paid back (Fully Paid / Current)
+# Goal: predict whether a borrower will default on their loan
+# using only information available at the time the loan was issued.
 #
-# We only use pre-loan columns — columns like recoveries, total_pymnt,
-# and collection_recovery_fee only exist after a default has already happened,
-# so including them would be cheating (data leakage).
-
-
-
+# Target variable: 1 = defaulted (Charged Off), 0 = paid back
+#
+# Post-loan columns like recoveries and total_pymnt are excluded
+# because they only exist after a default has already happened.
+# Using them would mean training on the answer, not the inputs.
+ 
  
 # -----------------------------------------------------------
 # LOAD DATA
 # -----------------------------------------------------------
-
-# download dataset from Google Drive if not already present
+ 
+# pulls the file from Google Drive if it's not already downloaded
 file_path = Path.home() / "Downloads" / "loan (1).csv"
 if not file_path.exists():
     print("Downloading dataset from Google Drive...")
     gdown.download("https://drive.google.com/uc?id=1DtdOEFL9l5LCCUjXZBeHlrDJ7YmIgvQR", str(file_path), quiet=False)
  
+# everything is read as a string first so type conversion can be done manually and controlled
 df = pd.read_csv(
     file_path,
-    encoding="latin1",  # handles special characters in the CSV
-    dtype=str,          # read everything as string first, we cast manually below
+    encoding="latin1",  # latin1 handles special characters that break the default utf-8 reader
+    dtype=str,
     engine="python"
 )
  
-# drop columns that are completely empty or have only one unique value (no information)
+# columns that are entirely empty or have only one value carry no information
 df = df.dropna(axis=1, how="all")
 df = df.loc[:, df.nunique(dropna=False) > 1]
  
-# drop columns we will never use — identifiers and free text fields
+# identifiers and free text fields are useless for analysis
 df = df.drop(columns=[c for c in ["id", "member_id", "url", "title", "desc"] if c in df.columns])
  
-
+# these columns only exist after a loan has defaulted — keeping them would leak the outcome
 post_loan_cols = [
     "funded_amnt_inv", "out_prncp", "out_prncp_inv",
     "total_pymnt", "total_pymnt_inv", "total_rec_prncp",
@@ -52,16 +57,14 @@ post_loan_cols = [
     "collection_recovery_fee", "last_pymnt_amnt"
 ]
 df = df.drop(columns=[c for c in post_loan_cols if c in df.columns])
-  
+ 
  
 # -----------------------------------------------------------
 # SCHEMA DEFINITION
 # based on the LendingClub data dictionary
-# every column in the dataframe must be in one of these lists
+# every column must belong to one of these lists
 # -----------------------------------------------------------
  
-# only keeping pre-loan columns — post-loan columns like recoveries or total_pymnt
-# would leak information about the outcome 
 numeric_cols = [
     "loan_amnt", "funded_amnt",
     "installment", "annual_inc", "dti",
@@ -73,19 +76,19 @@ numeric_cols = [
     "chargeoff_within_12_mths"
 ]
  
-# stored as strings with a % sign, need to strip that before converting
+# these come in as strings like "13.5%" so the % needs stripping before conversion
 percent_cols = [
     "int_rate",
     "revol_util"
 ]
  
-# stored as "Jan-14" format, need to parse correctly
+# stored as "Jan-14" — not a standard format so the pattern needs to be specified explicitly
 date_cols = [
     "issue_d",
     "earliest_cr_line",
     "last_pymnt_d",
     "last_credit_pull_d",
-     "next_pymnt_d",
+    "next_pymnt_d",
 ]
  
 categorical_cols = [
@@ -94,25 +97,24 @@ categorical_cols = [
     "purpose", "zip_code", "addr_state",
     "emp_title", "emp_length"
 ]
-
+ 
  
 # -----------------------------------------------------------
 # SCHEMA VALIDATION
-# check if any columns were missed or don't exist in the data
+# catches columns that were missed or don't exist in this dataset
 # -----------------------------------------------------------
 schema_cols = set(numeric_cols + percent_cols + date_cols + categorical_cols)
 df_cols = set(df.columns)
  
-missing_in_df = schema_cols - df_cols        # in schema but not in data
-missing_in_schema = df_cols - schema_cols    # in data but not classified
+missing_in_df = schema_cols - df_cols
+missing_in_schema = df_cols - schema_cols
  
 if missing_in_df:
     print("In schema but not in data:", missing_in_df)
 if missing_in_schema:
     print("In data but not classified:", missing_in_schema)
  
-# filter each list to only columns that actually exist in the dataframe
-# prevents crashes if a column is missing
+# safety filter — avoids crashes if a column from the schema is missing in this particular file
 numeric_cols     = [col for col in numeric_cols     if col in df.columns]
 percent_cols     = [col for col in percent_cols     if col in df.columns]
 date_cols        = [col for col in date_cols        if col in df.columns]
@@ -123,19 +125,18 @@ categorical_cols = [col for col in categorical_cols if col in df.columns]
 # TYPE CASTING
 # -----------------------------------------------------------
  
-# convert to numbers — any value that can't be converted becomes NaN
+# errors="coerce" turns anything unparseable into NaN instead of crashing
 df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
  
-# strip the % sign then convert to number
+# strip the % sign first, otherwise the conversion fails entirely
 for col in percent_cols:
     df[col] = df[col].str.replace("%", "", regex=False)
     df[col] = pd.to_numeric(df[col], errors="coerce")
  
-# dates are stored as "Jan-14" so we specify the format explicitly
 for col in date_cols:
     df[col] = pd.to_datetime(df[col], format="%b-%y", errors="coerce")
  
-# category dtype is more memory efficient than storing repeated strings
+# category dtype stores repeated strings much more efficiently than plain object
 for col in categorical_cols:
     df[col] = df[col].astype("category")
  
@@ -146,23 +147,20 @@ for col in categorical_cols:
 print("\nMissing values before cleaning:")
 print(df.isnull().sum()[df.isnull().sum() > 0])
  
-# next_pymnt_d is 97% empty so not worth keeping
+# 97% empty so not worth keeping
 df = df.drop(columns=["next_pymnt_d"], errors="ignore")
  
-# missing here means the event never happened, so 0 is the correct fill
+# missing here means the event never happened, so 0 is the right assumption
 for col in ["collections_12_mths_ex_med", "chargeoff_within_12_mths",
             "tax_liens", "pub_rec_bankruptcies",
             "mths_since_last_delinq", "mths_since_last_record"]:
     df[col] = df[col].fillna(0)
-
-
-# flag rows where revol_util was missing before we fill it
-# useful to keep this information rather than just losing it
+ 
+# record which rows had missing revol_util before filling — that missingness might carry signal
 df["revol_util_missing"] = df["revol_util"].isna().astype(int)
 df["revol_util"] = df["revol_util"].fillna(df["revol_util"].median())
  
-# emp_title and emp_length are categorical so we fill with "Unknown"
-# need to convert back to object first because category dtype only allows existing categories
+# category dtype only allows existing categories, so convert back to object before filling
 df["emp_title"] = df["emp_title"].astype("object").fillna("Unknown")
 df["emp_length"] = df["emp_length"].astype("object").fillna("Unknown")
  
@@ -171,22 +169,20 @@ df["emp_length"] = df["emp_length"].astype("object").fillna("Unknown")
 # FEATURE ENGINEERING
 # -----------------------------------------------------------
  
-# replace 0 income with NaN to avoid division by zero in the ratios below
+# 0 income would cause division by zero in the ratios below
 df["annual_inc"] = df["annual_inc"].replace(0, np.nan)
  
-# how large is the loan relative to the borrower's income
+# measures how stretched the borrower is relative to their income
 df["loan_to_income"] = df["loan_amnt"] / df["annual_inc"]
- 
-# how much of monthly income goes toward this loan payment
 df["installment_ratio"] = df["installment"] / df["annual_inc"]
  
-# how many years of credit history the borrower had when they took the loan
+# longer credit history generally signals a more reliable borrower
 df["credit_age_years"] = (df["issue_d"] - df["earliest_cr_line"]).dt.days / 365
  
-# how many days between loan issue and last payment
+# shorter loan duration can indicate early default or early payoff
 df["loan_duration_days"] = (df["last_pymnt_d"] - df["issue_d"]).dt.days
  
-# binary flags for high risk indicators
+# quick binary flags for borrowers who are already in a high risk zone
 df["high_dti_flag"] = (df["dti"] > 20).astype(int)
 df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
  
@@ -194,23 +190,36 @@ df["high_interest_flag"] = (df["int_rate"] > 15).astype(int)
 # -----------------------------------------------------------
 # TARGET VARIABLE
 # -----------------------------------------------------------
-# 1 = loan was charged off (defaulted), 0 = fully paid or current
+# 1 = defaulted, 0 = fully paid or still current
 df["target_default"] = (df["loan_status"] == "Charged Off").astype(int)
-
-
+ 
+ 
 # -----------------------------------------------------------
-# EXPORT TO SQLITE AND CSV
+# EXPORT TO MYSQL AND CSV
 # -----------------------------------------------------------
 output_path = Path(__file__).parent
-
-conn = sqlite3.connect(output_path / "loans.db")
-df.to_sql("loans", conn, if_exists="replace", index=False)
+ 
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+if not DB_PASSWORD:
+    raise ValueError("DB_PASSWORD environment variable not set. Run: export DB_PASSWORD=your_password")
+ 
+# create the database if it doesn't exist yet
+conn = mysql.connector.connect(host="localhost", user="root", password=DB_PASSWORD)
+cursor = conn.cursor()
+cursor.execute("CREATE DATABASE IF NOT EXISTS loan_db")
+cursor.close()
 conn.close()
-print("Data saved to loans.db")
-
+ 
+# load the cleaned dataframe into MySQL
+engine = create_engine(f"mysql+mysqlconnector://root:{DB_PASSWORD}@localhost/loan_db")
+df.to_sql("loans", engine, if_exists="replace", index=False)
+print("Data saved to MySQL — loan_db.loans")
+ 
+# CSV export for Tableau and other tools
 df.to_csv(output_path / "loans_clean.csv", index=False)
 print("Data saved to loans_clean.csv")
-
+ 
+ 
 # -----------------------------------------------------------
 # SUMMARY
 # -----------------------------------------------------------
@@ -219,4 +228,4 @@ print(f"Default rate: {df['target_default'].mean():.1%}")
 print("\nRemaining missing values:")
 missing = df.isnull().sum()[df.isnull().sum() > 0]
 print(missing if not missing.empty else "None")
-
+ 

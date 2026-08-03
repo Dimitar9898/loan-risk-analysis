@@ -19,7 +19,7 @@ FROM loans;
 -- default rate by grade, as grade gets worse, default rate increases consistently
 SELECT grade,
        COUNT(*) as total_loans,
-       SUM(target_default) as defaults,
+       SUM(target_default) as total_defaults,
        ROUND(AVG(target_default) * 100, 2) as default_rate_pct
 FROM loans
 GROUP BY grade
@@ -154,18 +154,22 @@ LIMIT 20;
 -- multi factor risk profile
 -- borrowers who combine bad grade + high dti + renting + small business
 WITH risk_profile AS (
-    SELECT *,
-        CASE
-            WHEN grade IN ('E','F','G') THEN 1 ELSE 0 END +
+
+    SELECT
+        *,
+        CASE WHEN grade IN ('E', 'F', 'G') THEN 1 ELSE 0 END +
         CASE WHEN dti > 20 THEN 1 ELSE 0 END +
         CASE WHEN home_ownership = 'RENT' THEN 1 ELSE 0 END +
         CASE WHEN purpose = 'small_business' THEN 1 ELSE 0 END
-        as risk_score
+        AS risk_score
     FROM loans
+
 )
-SELECT risk_score,
-       COUNT(*) as total_loans,
-       ROUND(AVG(target_default) * 100, 2) as default_rate_pct
+
+SELECT
+    risk_score,
+    COUNT(*) AS total_loans,
+    ROUND(AVG(target_default) * 100, 2) AS default_rate_pct
 FROM risk_profile
 GROUP BY risk_score
 ORDER BY risk_score DESC;

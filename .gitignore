@@ -1,3 +1,4 @@
 *.db
 *_clean.csv
 *.twb
+.env
