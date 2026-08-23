@@ -54,7 +54,8 @@ post_loan_cols = [
     "funded_amnt_inv", "out_prncp", "out_prncp_inv",
     "total_pymnt", "total_pymnt_inv", "total_rec_prncp",
     "total_rec_int", "total_rec_late_fee", "recoveries",
-    "collection_recovery_fee", "last_pymnt_amnt"
+    "collection_recovery_fee", "last_pymnt_amnt",
+    "last_pymnt_d", "last_credit_pull_d", "next_pymnt_d"  # added: post-origination dates, moved here for consistency
 ]
 df = df.drop(columns=[c for c in post_loan_cols if c in df.columns])
  
@@ -86,9 +87,6 @@ percent_cols = [
 date_cols = [
     "issue_d",
     "earliest_cr_line",
-    "last_pymnt_d",
-    "last_credit_pull_d",
-    "next_pymnt_d",
 ]
  
 categorical_cols = [
@@ -147,8 +145,6 @@ for col in categorical_cols:
 print("\nMissing values before cleaning:")
 print(df.isnull().sum()[df.isnull().sum() > 0])
  
-# 97% empty so not worth keeping
-df = df.drop(columns=["next_pymnt_d"], errors="ignore")
  
 # missing here means the event never happened, so 0 is the right assumption
 for col in ["collections_12_mths_ex_med", "chargeoff_within_12_mths",
@@ -160,10 +156,9 @@ for col in ["collections_12_mths_ex_med", "chargeoff_within_12_mths",
 df["revol_util_missing"] = df["revol_util"].isna().astype(int)
 df["revol_util"] = df["revol_util"].fillna(df["revol_util"].median())
  
-# category dtype only allows existing categories, so convert back to object before filling
-df["emp_title"] = df["emp_title"].astype("object").fillna("Unknown")
-df["emp_length"] = df["emp_length"].astype("object").fillna("Unknown")
- 
+# categories that are missing are treated as a separate category called "Unknown"
+df["emp_title"] = df["emp_title"].cat.add_categories("Unknown").fillna("Unknown")
+df["emp_length"] = df["emp_length"].cat.add_categories("Unknown").fillna("Unknown")
  
 # -----------------------------------------------------------
 # FEATURE ENGINEERING
@@ -179,8 +174,7 @@ df["installment_ratio"] = df["installment"] / df["annual_inc"]
 # longer credit history generally signals a more reliable borrower
 df["credit_age_years"] = (df["issue_d"] - df["earliest_cr_line"]).dt.days / 365
  
-# shorter loan duration can indicate early default or early payoff
-df["loan_duration_days"] = (df["last_pymnt_d"] - df["issue_d"]).dt.days
+
  
 # quick binary flags for borrowers who are already in a high risk zone
 df["high_dti_flag"] = (df["dti"] > 20).astype(int)
