@@ -15,7 +15,10 @@ LendingClub needs to know which borrowers are likely to default before approving
 This project builds a profile of high risk borrowers using historical loan data. 
 The findings can help lenders decide who to approve, what interest rate to charge, and which combinations of risk factors to watch out for.
 ---
+Dashboard
+The Tableau dashboard shows the key findings visually. It covers default rate by grade, loan purpose, employment length, and state, plus average loan amount by grade.
 
+[View the live dashboard here] (https://public.tableau.com/views/LendingClub_17806833936180/Dashboard2)
 
 ## Dataset
 The dataset comes from LendingClub and contains 39,717 loans with information on borrower income, credit history, loan purpose, grade, and repayment status. 14.2% of loans in the dataset ended in default.
